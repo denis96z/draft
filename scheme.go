@@ -8,18 +8,19 @@ import (
 
 // Scheme — описательная часть api и сбосов его использования
 type Scheme struct {
-	mu         sync.Mutex
-	url        string
-	name       string
-	descr      string
-	project    string
-	cases      []*SchemeCase
-	defAccess  AccessType
-	defMethod  MethodType
-	defParams  interface{}
-	defBody    interface{}
-	defHeaders SchemeCaseHeaders
-	activeCase *SchemeCase
+	mu          sync.Mutex
+	url         string
+	name        string
+	descr       string
+	project     string
+	cases       []*SchemeCase
+	defAccess   AccessType
+	defMethod   MethodType
+	defConsumes MimeType
+	defParams   interface{}
+	defBody     interface{}
+	defHeaders  SchemeCaseHeaders
+	activeCase  *SchemeCase
 }
 
 // SchemeCase — описание и пример использование
@@ -29,6 +30,7 @@ type SchemeCase struct {
 	Access      AccessType        `json:"access"`
 	Status      StatusType        `json:"status"`
 	Method      MethodType        `json:"method"`
+	Consumes    MimeType          `json:"consumes"`
 	Params      interface{}       `json:"params"`
 	Headers     SchemeCaseHeaders `json:"headers"`
 	Body        interface{}       `json:"body"`
@@ -59,9 +61,10 @@ type JSONSchemeDetail struct {
 
 // JSONSchemeRequest -
 type JSONSchemeRequest struct {
-	Method  MethodType              `json:"method"`
-	Headers map[string]reflect.Item `json:"headers"`
-	Params  map[string]reflect.Item `json:"params"`
+	Method   MethodType              `json:"method"`
+	Consumes MimeType                `json:"consumes"`
+	Headers  map[string]reflect.Item `json:"headers"`
+	Params   map[string]reflect.Item `json:"params"`
 }
 
 // JSONSchemeResponse -
@@ -100,6 +103,15 @@ func (s *Scheme) Method(v MethodType) {
 		s.activeCase.Method = v
 	} else {
 		s.defMethod = v
+	}
+}
+
+// Consumes — выставить Content-Type, принимаемый на вход, к апишке или `case`
+func (s *Scheme) Consumes(v MimeType) {
+	if s.activeCase != nil {
+		s.activeCase.Consumes = v
+	} else {
+		s.defConsumes = v
 	}
 }
 
@@ -154,11 +166,12 @@ func (s *Scheme) Case(status StatusType, name string, fn func()) {
 	defer s.mu.Unlock()
 
 	s.activeCase = &SchemeCase{
-		Status: status,
-		Name:   name,
-		Method: s.defMethod,
-		Access: s.defAccess,
-		Params: s.defParams,
+		Status:   status,
+		Name:     name,
+		Method:   s.defMethod,
+		Consumes: s.defConsumes,
+		Access:   s.defAccess,
+		Params:   s.defParams,
 		Headers: SchemeCaseHeaders{
 			Request:  s.defHeaders.Request,
 			Response: s.defHeaders.Response,
@@ -202,9 +215,10 @@ func (s *Scheme) ToJSON() JSONScheme {
 		if !exists {
 			d = &JSONSchemeDetail{
 				Request: &JSONSchemeRequest{
-					Method:  c.Method,
-					Headers: make(map[string]reflect.Item),
-					Params:  make(map[string]reflect.Item),
+					Method:   c.Method,
+					Consumes: c.Consumes,
+					Headers:  make(map[string]reflect.Item),
+					Params:   make(map[string]reflect.Item),
 				},
 
 				Response: &JSONSchemeResponse{
